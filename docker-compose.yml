@@ -2,12 +2,19 @@ version: '3.7'
 services:
     emailengine:
         restart: always
-        image: andris9/emailengine:v2
+        build:
+            context: .
+            dockerfile: Dockerfile
+        volumes:
+            - ./:/emailengine
+            - nodemodules:/emailengine/node_modules
         ports:
             # API and web interface
             - '3000:3000'
             # SMTP for message submission
             - '2525:2525'
+        networks:
+            - network
         depends_on:
             - redis
         environment:
@@ -36,3 +43,11 @@ services:
         restart: always
         volumes:
             - /data
+        networks:
+            - network
+volumes:
+    nodemodules: {}
+
+networks:
+    network:
+        external: false
