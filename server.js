@@ -40,7 +40,7 @@ const { QueueScheduler } = require('bullmq');
 const config = require('wild-config');
 const getSecret = require('./lib/get-secret');
 
-const { getDuration, getByteSize, getBoolean, getWorkerCount, selectRendezvousNode, checkLicense, checkForUpgrade, setLicense } = require('./lib/tools');
+const { getDuration, getByteSize, getBoolean, getWorkerCount, selectRendezvousNode, checkForUpgrade } = require('./lib/tools');
 const { MAX_DAYS_STATS, MESSAGE_NEW_NOTIFY, MESSAGE_DELETED_NOTIFY, CONNECT_ERROR_NOTIFY, REDIS_PREFIX } = require('./lib/consts');
 const msgpack = require('msgpack5')();
 
@@ -116,13 +116,6 @@ const NO_ACTIVE_HANDLER_RESP = {
 
 // check for upgrades once in 8 hours
 const UPGRADE_CHECK_TIMEOUT = 8 * 3600 * 1000;
-const LICENSE_CHECK_TIMEOUT = 15 * 60 * 1000;
-
-const licenseInfo = {
-    active: false,
-    details: false,
-    type: packageData.license
-};
 
 let notifyScheduler;
 let submitScheduler;
@@ -687,62 +680,6 @@ async function assignAccounts() {
     }
 }
 
-let licenseCheckTimer = false;
-let licenseCheckHandler = async () => {
-    if (licenseInfo.active && licenseInfo.details && licenseInfo.details.expires && new Date(licenseInfo.details.expires).getTime() < Date.now()) {
-        // clear expired license
-
-        logger.info({ msg: 'License expired', license: licenseInfo.details });
-
-        licenseInfo.active = false;
-        licenseInfo.details = false;
-    }
-
-    if (!licenseInfo.active && !suspendedWorkerTypes.size) {
-        logger.info({ msg: 'No active license, shutting down workers after 15 minutes of activity' });
-
-        for (let type of ['imap', 'submit', 'smtp', 'webhooks']) {
-            suspendedWorkerTypes.add(type);
-            if (workers.has(type)) {
-                for (let worker of workers.get(type).values()) {
-                    worker.terminate();
-                }
-            }
-        }
-    } else {
-        if (licenseInfo.active && suspendedWorkerTypes.size) {
-            // re-enable missing workers
-            for (let type of suspendedWorkerTypes) {
-                suspendedWorkerTypes.delete(type);
-                switch (type) {
-                    case 'smtp':
-                        if (SMTP_ENABLED) {
-                            // single SMTP interface worker
-                            await spawnWorker('smtp');
-                        }
-                        break;
-                    default:
-                        if (config.workers && config.workers[type]) {
-                            for (let i = 0; i < config.workers[type]; i++) {
-                                await spawnWorker(type);
-                            }
-                        }
-                }
-            }
-        }
-
-        licenseCheckTimer = setTimeout(checkActiveLicense, LICENSE_CHECK_TIMEOUT);
-        licenseCheckTimer.unref();
-    }
-};
-
-function checkActiveLicense() {
-    clearTimeout(licenseCheckTimer);
-    licenseCheckHandler().catch(err => {
-        logger.error('Failed to process license checker', err);
-    });
-}
-
 let processCheckUpgrade = async () => {
     try {
         let updateInfo = await checkForUpgrade();
@@ -808,54 +745,6 @@ async function onCommand(worker, message) {
                 }
             }
             return { connections };
-        }
-
-        case 'license':
-            if (!licenseInfo.active && suspendedWorkerTypes.size) {
-                return Object.assign({}, licenseInfo, { suspended: true });
-            }
-            return licenseInfo;
-
-        case 'updateLicense': {
-            try {
-                const licenseFile = message.license;
-
-                let licenseData = await checkLicense(licenseFile);
-                if (!licenseData) {
-                    throw new Error('Failed to verify provided license');
-                }
-
-                logger.info({ msg: 'Loaded license', license: licenseData, source: 'API' });
-
-                await setLicense(licenseData, licenseFile);
-
-                licenseInfo.active = true;
-                licenseInfo.details = licenseData;
-                licenseInfo.type = 'EmailEngine License';
-
-                // re-enable workers
-                checkActiveLicense();
-
-                return licenseInfo;
-            } catch (err) {
-                logger.fatal({ msg: 'Failed to verify provided license', source: 'API', err });
-                return false;
-            }
-        }
-
-        case 'removeLicense': {
-            try {
-                await redis.hdel(`${REDIS_PREFIX}settings`, 'license');
-
-                licenseInfo.active = false;
-                licenseInfo.details = false;
-                licenseInfo.type = packageData.license;
-
-                return licenseInfo;
-            } catch (err) {
-                logger.fatal({ msg: 'Failed to remove existing license', err });
-                return false;
-            }
         }
 
         case 'new':
@@ -1037,61 +926,6 @@ process.on('SIGINT', () => {
 // START APPLICATION
 
 const startApplication = async () => {
-    // process license
-    if (config.licensePath) {
-        try {
-            let stat = await fs.stat(config.licensePath);
-            if (!stat.isFile()) {
-                throw new Error(`Provided license key is not a regular file`);
-            }
-            const licenseFile = await fs.readFile(config.licensePath, 'utf-8');
-            let licenseData = await checkLicense(licenseFile);
-            if (!licenseData) {
-                throw new Error('Failed to verify provided license key');
-            }
-            logger.info({ msg: 'Loaded license key', license: licenseData, source: config.licensePath });
-
-            await setLicense(licenseData, licenseFile);
-        } catch (err) {
-            logger.fatal({ msg: 'Failed to verify provided license key file', source: config.licensePath, err });
-            return process.exit(13);
-        }
-    }
-
-    const preparedLicenseString = process.env.EENGINE_PREPARED_LICENSE || config.preparedLicense;
-    if (preparedLicenseString) {
-        try {
-            let imported = await settings.importLicense(preparedLicenseString, checkLicense);
-            if (imported) {
-                logger.info({ msg: 'Imported license key', source: 'import' });
-            }
-        } catch (err) {
-            logger.fatal({ msg: 'Failed to verify provided license key data', source: 'import', err });
-            return process.exit(13);
-        }
-    }
-
-    let licenseFile = await redis.hget(`${REDIS_PREFIX}settings`, 'license');
-    if (licenseFile) {
-        try {
-            let licenseData = await checkLicense(licenseFile);
-            if (!licenseData) {
-                throw new Error('Failed to verify provided license key');
-            }
-            licenseInfo.active = true;
-            licenseInfo.details = licenseData;
-            licenseInfo.type = 'EmailEngine License';
-            if (!config.licensePath) {
-                logger.info({ msg: 'Loaded license', license: licenseData, source: 'db' });
-            }
-        } catch (err) {
-            logger.fatal({ msg: 'Failed to verify stored license key', content: licenseFile, err });
-        }
-    }
-
-    if (!licenseInfo.active) {
-        logger.fatal({ msg: 'No active license key provided. Running in limited mode.' });
-    }
 
     // check for updates, run as a promise to not block other activities
     processCheckUpgrade().catch(err => {
@@ -1220,9 +1054,6 @@ startApplication()
         setInterval(() => {
             collectMetrics().catch(err => logger.error({ msg: 'Failed to collect metrics', err }));
         }, 1000).unref();
-
-        licenseCheckTimer = setTimeout(checkActiveLicense, LICENSE_CHECK_TIMEOUT);
-        licenseCheckTimer.unref();
 
         upgradeCheckTimer = setTimeout(checkUpgrade, UPGRADE_CHECK_TIMEOUT);
         upgradeCheckTimer.unref();

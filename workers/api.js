@@ -51,7 +51,6 @@ const {
     messageListSchema,
     mailboxesSchema,
     shortMailboxesSchema,
-    licenseSchema,
     lastErrorSchema
 } = require('../lib/schemas');
 
@@ -265,9 +264,6 @@ const init = async () => {
             url.searchParams.set('access_token', 'preauth');
             request.setUrl(`${url.pathname}${url.search}`);
         }
-
-        // make license info available for the request
-        request.app.licenseInfo = await call({ cmd: 'license' });
 
         // flash notifications
         request.flash = async message => await flash(redis, request, message);
@@ -495,17 +491,6 @@ When making API calls remember that requests against the same account are queued
         path: '/LICENSE.txt',
         handler: {
             file: { path: pathlib.join(__dirname, '..', 'LICENSE.txt'), confine: false }
-        },
-        options: {
-            auth: false
-        }
-    });
-
-    server.route({
-        method: 'GET',
-        path: '/LICENSE_EMAILENGINE.txt',
-        handler: {
-            file: { path: pathlib.join(__dirname, '..', 'LICENSE_EMAILENGINE.txt'), confine: false }
         },
         options: {
             auth: false
@@ -2986,154 +2971,6 @@ When making API calls remember that requests against the same account are queued
 
     server.route({
         method: 'GET',
-        path: '/v1/license',
-
-        async handler() {
-            try {
-                const licenseInfo = await call({ cmd: 'license' });
-                if (!licenseInfo) {
-                    let err = new Error('Failed to load license info');
-                    err.statusCode = 403;
-                    throw err;
-                }
-                return licenseInfo;
-            } catch (err) {
-                if (Boom.isBoom(err)) {
-                    throw err;
-                }
-                let error = Boom.boomify(err, { statusCode: err.statusCode || 500 });
-                if (err.code) {
-                    error.output.payload.code = err.code;
-                }
-                throw error;
-            }
-        },
-        options: {
-            description: 'Request license info',
-            notes: 'Get active license information',
-            tags: ['api', 'license'],
-
-            auth: {
-                strategy: 'api-token',
-                mode: 'required'
-            },
-
-            response: {
-                schema: licenseSchema.label('LicenseResponse'),
-                failAction: 'log'
-            }
-        }
-    });
-
-    server.route({
-        method: 'DELETE',
-        path: '/v1/license',
-
-        async handler() {
-            try {
-                const licenseInfo = await call({ cmd: 'removeLicense' });
-                if (!licenseInfo) {
-                    let err = new Error('Failed to clear license info');
-                    err.statusCode = 403;
-                    throw err;
-                }
-                return licenseInfo;
-            } catch (err) {
-                if (Boom.isBoom(err)) {
-                    throw err;
-                }
-                let error = Boom.boomify(err, { statusCode: err.statusCode || 500 });
-                if (err.code) {
-                    error.output.payload.code = err.code;
-                }
-                throw error;
-            }
-        },
-        options: {
-            description: 'Remove license',
-            notes: 'Remove registered active license',
-            tags: ['api', 'license'],
-
-            plugins: {},
-
-            auth: {
-                strategy: 'api-token',
-                mode: 'required'
-            },
-
-            response: {
-                schema: Joi.object({
-                    active: Joi.boolean().example(false),
-                    details: Joi.boolean().example(false),
-                    type: Joi.string().example('AGPL-3.0-or-later')
-                }).label('EmptyLicenseResponse'),
-                failAction: 'log'
-            }
-        }
-    });
-
-    server.route({
-        method: 'POST',
-        path: '/v1/license',
-
-        async handler(request) {
-            try {
-                const licenseInfo = await call({ cmd: 'updateLicense', license: request.payload.license });
-                if (!licenseInfo) {
-                    let err = new Error('Failed to update license. Check license file contents.');
-                    err.statusCode = 403;
-                    throw err;
-                }
-                return licenseInfo;
-            } catch (err) {
-                if (Boom.isBoom(err)) {
-                    throw err;
-                }
-                let error = Boom.boomify(err, { statusCode: err.statusCode || 500 });
-                if (err.code) {
-                    error.output.payload.code = err.code;
-                }
-                throw error;
-            }
-        },
-        options: {
-            description: 'Register a license',
-            notes: 'Set up a license for EmailEngine to unlock all features',
-            tags: ['api', 'license'],
-
-            plugins: {},
-
-            auth: {
-                strategy: 'api-token',
-                mode: 'required'
-            },
-
-            validate: {
-                options: {
-                    stripUnknown: false,
-                    abortEarly: false,
-                    convert: true
-                },
-                failAction,
-
-                payload: Joi.object({
-                    license: Joi.string()
-                        .max(10 * 1024)
-                        .required()
-                        .example('-----BEGIN LICENSE-----\r\n...')
-                        .description('License file')
-                }).label('RegisterLicense')
-            },
-
-            response: {
-                schema: licenseSchema.label('LicenseResponse'),
-                failAction: 'log'
-            }
-        }
-    });
-
-    server.route({
-        method: 'GET',
         path: '/v1/autoconfig',
 
         async handler(request) {
@@ -3452,31 +3289,6 @@ When making API calls remember that requests against the same account are queued
                 });
             }
 
-            if (!request.app.licenseInfo || !request.app.licenseInfo.active) {
-                systemAlerts.push({
-                    url: '/admin/config/license',
-                    level: 'warning',
-                    icon: 'key',
-                    message: 'License key is not registered'
-                });
-            }
-
-            let licenseDetails = Object.assign({}, (request.app.licenseInfo && request.app.licenseInfo.details) || {});
-
-            if (licenseDetails.expires) {
-                let delayMs = new Date(licenseDetails.expires) - Date.now();
-                licenseDetails.expiresDays = Math.max(Math.ceil(delayMs / (24 * 3600 * 1000)), 0);
-            }
-
-            if (licenseDetails.expires && licenseDetails.expiresDays < 31) {
-                systemAlerts.push({
-                    url: '/admin/config/license',
-                    level: 'warning',
-                    icon: 'key',
-                    message: `Your ${licenseDetails.trial ? `trial ` : ''}license key will expire in ${licenseDetails.expiresDays} days`
-                });
-            }
-
             let disableTokens = await settings.get('disableTokens');
             if (disableTokens) {
                 systemAlerts.push({
@@ -3491,8 +3303,6 @@ When making API calls remember that requests against the same account are queued
                 values: request.payload || {},
                 errors: (request.error && request.error.details) || {},
                 pendingMessages,
-                licenseInfo: request.app.licenseInfo,
-                licenseDetails,
                 authEnabled: !!(authData && authData.password),
                 trialPossible: !(await settings.get('tract')),
                 authData,

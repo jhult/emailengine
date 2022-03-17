@@ -6,8 +6,6 @@ account using an easy-to-use REST API.
 Commands:
   emailengine                   Run the application
   emailengine help              Show this information
-  emailengine license           Show license information
-  emailengine license [command] License management
   emailengine password          Set admin password
   emailengine scan              Scan keyspace in Redis and display results in
                                 the CSV format
@@ -47,14 +45,6 @@ Options:
 
 "emailengine encrypt" additional options:
   --decrypt  Old secret for decrypting (can be issued multiple times)    [string]
-
-License management commands
-  emailengine license         Show license text
-
-  emailengine license export  Exports encoded license
-
-  emailengine license import  Imports encoded license
-    --license, -l             Encoded license                            [string]
 
 Token management commands
   emailengine tokens issue   Issues a new token

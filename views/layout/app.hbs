@@ -165,57 +165,6 @@
 
                     {{> alerts}}
 
-                    {{#unless licenseInfo.active}}
-
-                    {{#unless hideLicenseWarning}}
-                    <div id="license-warning" class="card border-left-danger shadow mb-4">
-                        <div class="card-body">
-
-                            {{#if licenseInfo.suspended}}
-                            <div class="alert alert-danger" role="alert">
-                                EmailEngine is currently not syncing any accounts. Please restart the application or
-                                register a valid license key to enable syncing.
-                            </div>
-                            {{/if}}
-
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                        License key missing</div>
-                                    <p>To use all the features of EmailEngine, you need to provide a valid license key.
-                                    </p>
-                                    <div>
-
-                                        {{#if trialPossible}}
-
-                                        <button type="button" id="start-trial-btn"
-                                            class="btn btn-success btn-icon-split">
-                                            <span class="icon text-white-50">
-                                                <i class="fas fa-gift"></i>
-                                            </span>
-                                            <span class="text">Start a 14-day trial</span>
-                                        </button>
-
-                                        {{/if}}
-
-                                        <a href="/admin/config/license" class="btn btn-primary btn-icon-split">
-                                            <span class="icon text-white-50">
-                                                <i class="fas fa-arrow-right"></i>
-                                            </span>
-                                            <span class="text">Register a license</span>
-                                        </a>
-
-                                    </div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-key fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {{/unless}}
-                    {{/unless}}
-
                     {{#unless authEnabled}}
                     {{#unless disableAuthWarning}}
                     <div class="card border-left-danger shadow mb-4">

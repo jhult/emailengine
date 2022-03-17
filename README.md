@@ -47,10 +47,10 @@ Later, when you want to upgrade, just download the newer version and restart the
 
 ## Version and license
 
-Run the following command to see the version and license information both for EmailEngine and for the included modules.
+Run the following command to see the version and license information for EmailEngine.
 
 ```
-$ emailengine license
+$ emailengine version
 ```
 
 ## Requirements
@@ -133,4 +133,4 @@ Read about logging options [here](https://emailengine.app/logging)
 
 ## Licensing
 
-Dual licensed under [GNU Affero General Public License v3.0](./LICENSE.txt) or later and the [EmailEngine License](./LICENSE_EMAILENGINE.txt).
+Licensed under [GNU Affero General Public License v3.0](./LICENSE.txt) or later.

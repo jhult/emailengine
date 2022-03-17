@@ -19,7 +19,7 @@
         "IMAP"
     ],
     "author": "Postal Systems OU",
-    "license": "AGPL-3.0-or-later OR LICENSE_EMAILENGINE",
+    "license": "AGPL-3.0-or-later",
     "bin": {
         "emailengine": "bin/emailengine.js"
     },
@@ -104,7 +104,6 @@
             "node_modules/bull/lib/commands/**/*",
             "node_modules/swagger-ui-dist/**/*",
             "LICENSE.txt",
-            "LICENSE_EMAILENGINE.txt",
             "help.txt",
             "version-info.json"
         ],

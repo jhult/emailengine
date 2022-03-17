@@ -6,7 +6,6 @@ const packageData = require('../package.json');
 const fs = require('fs');
 const pathlib = require('path');
 const settings = require('../lib/settings');
-const { checkLicense } = require('../lib/tools');
 const pbkdf2 = require('@phc/pbkdf2');
 const { PDKDF2_ITERATIONS, PDKDF2_SALT_SIZE, PDKDF2_DIGEST } = require('../lib/consts');
 
@@ -98,81 +97,6 @@ switch (cmd) {
         // Show version
         console.log(`EmailEngine v${packageData.version} (${packageData.license})`);
         return process.exit();
-
-    case 'license':
-        {
-            let licenseCmd = ((argv._ && argv._[1]) || '').toLowerCase();
-            if (licenseCmd === 'export') {
-                return settings
-                    .exportLicense()
-                    .then(license => {
-                        console.log(license);
-                        return process.exit(0);
-                    })
-                    .catch(err => {
-                        console.error('Failed to load license information');
-                        console.error(err);
-                        return process.exit(1);
-                    });
-            }
-
-            if (licenseCmd === 'import') {
-                return settings
-                    .importLicense((argv.license || argv.l || '').toString(), checkLicense)
-                    .then(result => {
-                        if (!result) {
-                            console.error('License key was not imported');
-                        } else {
-                            console.error('License key was imported');
-                        }
-                        return process.exit(0);
-                    })
-                    .catch(err => {
-                        console.error(`Failed to import license information${err.code ? ` [${err.code}]` : ''}`);
-                        console.error(err);
-                        return process.exit(1);
-                    });
-            }
-
-            // Display license information
-            fs.readFile(pathlib.join(__dirname, '..', 'LICENSE.txt'), (err, license) => {
-                if (err) {
-                    console.error('Failed to load license information');
-                    console.error(err);
-                    return process.exit(1);
-                }
-
-                fs.readFile(pathlib.join(__dirname, '..', 'LICENSE_EMAILENGINE.txt'), (err, licenseComm) => {
-                    if (err) {
-                        console.error('Failed to load license information');
-                        console.error(err);
-                        return process.exit(1);
-                    }
-
-                    console.error('EmailEngine License');
-                    console.error('===================');
-
-                    console.log(`EmailEngine v${packageData.version}`);
-                    console.error(`(c) 2020-${new Date().getFullYear()} Postal Systems`);
-                    console.error(`${packageData.license}, full text follows`);
-                    console.error('');
-
-                    console.error('-'.repeat(78));
-                    console.error(license.toString().trim());
-
-                    console.error('');
-                    console.error('-'.repeat(78));
-                    console.error('');
-
-                    console.error(licenseComm.toString().trim());
-                    console.error('-'.repeat(78));
-                    console.error('');
-
-                    process.exit();
-                });
-            });
-        }
-        break;
 
     case 'tokens':
         {
